@@ -1,0 +1,39 @@
+{
+    "paths": {
+        "query_file": "/home/coskun/queries.txt",
+        "proxy_file": "/home/coskun/proxies.txt",
+        "user_agents": "user_agents.txt",
+        "filtered_domains": "domains.txt"
+    },
+    "webdriver": {
+        "proxy": "",
+        "auth": true,
+        "incognito": false,
+        "country_domain": false,
+        "language_from_proxy": false,
+        "ss_on_exception": false,
+        "window_size": "",
+        "shift_windows": false
+    },
+    "behavior": {
+        "query": "",
+        "ad_page_min_wait": 10,
+        "ad_page_max_wait": 15,
+        "nonad_page_min_wait": 15,
+        "nonad_page_max_wait": 20,
+        "max_scroll_limit": 0,
+        "check_shopping_ads": true,
+        "excludes": "",
+        "random_mouse": false,
+        "custom_cookies": false,
+        "click_order": 5,
+        "browser_count": 2,
+        "multiprocess_style": 1,
+        "loop_wait_time": 60,
+        "running_interval_start": "00:00",
+        "running_interval_end": "00:00",
+        "2captcha_apikey": "",
+        "hooks_enabled": false,
+        "telegram_enabled": false
+    }
+}
