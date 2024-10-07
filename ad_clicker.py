@@ -13,7 +13,6 @@ from config_reader import config
 from logger import logger, update_log_formats
 from proxy import get_proxies
 from search_controller import SearchController
-from telegram_notifier import notify_matching_ads, start_bot
 from utils import (
     create_webdriver,
     get_random_user_agent_string,
@@ -21,6 +20,9 @@ from utils import (
     take_screenshot,
     generate_click_report,
 )
+
+if config.behavior.telegram_enabled:
+    from telegram_notifier import notify_matching_ads, start_bot
 
 
 __author__ = "Coşkun Deniz <coskun.denize@gmail.com>"
