@@ -466,6 +466,7 @@ def create_webdriver(
             host, port = proxy.split("@")[1].split(":")
 
             install_plugin(chrome_options, host, int(port), username, password, plugin_folder_name)
+            sleep(2)
 
         else:
             chrome_options.add_argument(f"--proxy-server={proxy}")
@@ -484,6 +485,7 @@ def create_webdriver(
             ),
             options=chrome_options,
             user_multi_procs=multi_procs_enabled,
+            use_subprocess=False,
         )
 
         accuracy = 95
@@ -514,6 +516,7 @@ def create_webdriver(
             ),
             options=chrome_options,
             user_multi_procs=multi_procs_enabled,
+            use_subprocess=False,
         )
 
     if config.webdriver.window_size:
