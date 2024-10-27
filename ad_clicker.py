@@ -14,12 +14,12 @@ from logger import logger, update_log_formats
 from proxy import get_proxies
 from search_controller import SearchController
 from utils import (
-    create_webdriver,
     get_random_user_agent_string,
     get_domains,
     take_screenshot,
     generate_click_report,
 )
+from webdriver import create_webdriver
 
 if config.behavior.telegram_enabled:
     from telegram_notifier import notify_matching_ads, start_bot
@@ -54,6 +54,7 @@ def get_arg_parser() -> ArgumentParser:
     arg_parser.add_argument(
         "--check_nowsecure", action="store_true", help="Check nowsecure.nl for undetection"
     )
+    arg_parser.add_argument("-d", "--device_id", help="Android device ID for assigning to browser")
 
     return arg_parser
 
@@ -161,6 +162,9 @@ def main():
 
         if args.id:
             search_controller.set_browser_id(args.id)
+
+        if args.device_id:
+            search_controller.assign_android_device(args.device_id)
 
         ads, non_ad_links, shopping_ads = search_controller.search_for_ads(non_ad_domains=domains)
 

@@ -47,6 +47,7 @@ class BehaviorParams:
     twocaptcha_apikey: Optional[str] = ""
     hooks_enabled: Optional[bool] = False
     telegram_enabled: Optional[bool] = False
+    send_to_android: Optional[bool] = False
 
 
 class ConfigReader:
@@ -115,6 +116,7 @@ class ConfigReader:
             twocaptcha_apikey=config["behavior"]["2captcha_apikey"],
             hooks_enabled=config["behavior"]["hooks_enabled"],
             telegram_enabled=config["behavior"]["telegram_enabled"],
+            send_to_android=config["behavior"]["send_to_android"],
         )
 
 

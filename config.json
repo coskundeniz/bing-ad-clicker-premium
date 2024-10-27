@@ -34,6 +34,7 @@
         "running_interval_end": "00:00",
         "2captcha_apikey": "",
         "hooks_enabled": false,
-        "telegram_enabled": false
+        "telegram_enabled": false,
+        "send_to_android": false
     }
 }

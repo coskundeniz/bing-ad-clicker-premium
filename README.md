@@ -24,6 +24,7 @@ This command-line tool clicks ads for a certain query on Bing search using [unde
     * 2captcha integration
     * Telegram notification
     * Generate daily click report
+    * Open found links on Android device
     * Hooks for extending the tool with custom behavior
 
 <br>
@@ -119,7 +120,8 @@ The followings are the default values in the config file.
         "running_interval_end": "00:00",
         "2captcha_apikey": "",
         "hooks_enabled": false,
-        "telegram_enabled": false
+        "telegram_enabled": false,
+        "send_to_android": false
     }
 }
 ```
@@ -217,6 +219,48 @@ The followings are the default values in the config file.
 
     * There is a limit of 2048 characters. If the length of the message exceeds this, it will be truncated.
 
+* **send_to_android**: Send links to open on connected Android mobile device. Used with `run_ad_clicker.py` and `run_in_loop.py`.
+
+    * Note that mobile device must be connected to the same wireless network or directly via USB cable for one of these usages.
+
+    * If you have less devices(n) than browsers you run, first n browsers will be assigned to n devices.
+
+    * ADB setup steps
+        1. Open your phone’s **Settings**.
+        2. Scroll down to **About phone**.
+        3. Find **Build number** (usually under Software Information).
+        4. Tap Build number 7 times. You should see a message like "You are now a developer!"
+        5. Go back to Settings, and you will now see a **Developer options** menu.
+        6. Open **Developer options** and enable **USB Debugging**.
+
+        7. Install ADB on your computer
+            * `sudo apt install adb`
+
+            * See [here](https://www.xda-developers.com/install-adb-windows-macos-linux/) or [here](https://www.howtogeek.com/125769/how-to-install-and-use-abd-the-android-debug-bridge-utility/) for Windows.
+
+        8. Verify installation
+            * `adb version`
+
+        9. Connect your phone to your computer via USB.
+            * When prompted on your device, select Allow USB Debugging.
+
+        10. Check if ADB recognizes your device by running `adb devices`.
+            * If you see your device’s ID, the connection is successful.
+
+    * You can also use ADB wirelessly without a USB cable.
+
+        1. Connect your phone to your computer via USB and enable USB Debugging as explained before.
+        2. Run the following command.
+            * `adb tcpip 5555`
+
+        3. Disconnect the USB cable and find the phone’s IP address (Settings > About phone > Status).
+        4. Connect ADB to your phone wirelessly.
+            * `adb connect <phone_ip>:5555`
+
+    * Watch an example run
+
+        [![Send to Android](assets/send_to_android_cover.png)](https://youtu.be/SL92brQUBwA)
+
 <br>
 
 ### Enable Telegram Notification
@@ -286,7 +330,7 @@ Apply the following steps for once to enable Telegram notifications.
 
 [https://coskundeniz.github.io/ad_clicker](https://coskundeniz.github.io/ad_clicker)
 
-If you benefit from this tool, please consider donating using the sponsor links([patreon](https://patreon.com/pythondoctor), [ko-fi](https://ko-fi.com/coskundeniz)) or the following crypto addresses.
+If you benefit from this tool, please give a star and consider donating using the sponsor links([patreon](https://patreon.com/pythondoctor), [ko-fi](https://ko-fi.com/coskundeniz)) or the following crypto addresses.
 
 * ETH: 0x461c1B3bd9c3E2d949C56670C088465Bf3457F4B
 * USDT: 0x1a4f06937100Dc704031386667D731Bea0670aaf

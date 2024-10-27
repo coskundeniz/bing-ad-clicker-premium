@@ -4,7 +4,7 @@ import random
 from datetime import datetime
 from time import sleep
 from threading import Thread
-from typing import Optional, Union
+from typing import Any, Optional, Union
 
 import selenium
 from selenium.webdriver import ActionChains
@@ -19,15 +19,17 @@ from selenium.common.exceptions import (
 )
 
 import hooks
+from adb import adb_controller
 from clicklogs_db import ClickLogsDB
 from config_reader import config
 from logger import logger
 from stats import SearchStats
-from utils import Direction, add_cookies, solve_recaptcha, get_random_sleep
+from utils import Direction, add_cookies, solve_recaptcha, get_random_sleep, resolve_redirect
 
 
-AdList = list[tuple[selenium.webdriver.remote.webelement.WebElement, str, str, str]]
-NonAdList = list[selenium.webdriver.remote.webelement.WebElement]
+LinkElement = selenium.webdriver.remote.webelement.WebElement
+AdList = list[tuple[LinkElement, str, str]]
+NonAdList = list[LinkElement]
 AllLinks = list[Union[AdList, NonAdList]]
 
 
@@ -85,6 +87,8 @@ class SearchController:
         self._ad_page_max_wait = config.behavior.ad_page_max_wait
         self._nonad_page_min_wait = config.behavior.nonad_page_min_wait
         self._nonad_page_max_wait = config.behavior.nonad_page_max_wait
+
+        self._android_device_id = None
 
         self._stats = SearchStats()
 
@@ -172,88 +176,34 @@ class SearchController:
     def click_shopping_ads(self, shopping_ads: AdList) -> None:
         """Click shopping ads if there are any
 
-        :type ads: AdList
-        :param ads: List of (ad, ad_link, ad_title, ad_canon_link) tuples
+        :type shopping_ads: AdList
+        :param shopping_ads: List of (ad, ad_link, ad_title, ad_canon_link) tuples
         """
-
-        platform = sys.platform
-
-        control_command_key = Keys.COMMAND if platform.endswith("darwin") else Keys.CONTROL
 
         # store the ID of the original window
         original_window_handle = self._driver.current_window_handle
 
         for ad in shopping_ads:
             try:
-                ad_link_element = ad[0]
-                ad_link = ad[1]
-                ad_title = ad[2].replace("\n", " ")
-                ad_canon_link = ad[3]
+                ad_link_element, ad_link, ad_title, ad_canon_link = self._extract_link_info(
+                    ad, category="Shopping"
+                )
+
                 logger.info(f"Clicking to [{ad_title}]({ad_link}) | {ad_canon_link}...")
 
-                # open link in a different tab
-                actions = ActionChains(self._driver)
-                actions.move_to_element(ad_link_element)
-                actions.key_down(control_command_key)
-                actions.click()
-                actions.key_up(control_command_key)
-                actions.perform()
-                sleep(get_random_sleep(0.5, 1))
+                if self._hooks_enabled:
+                    hooks.before_ad_click_hook(self._driver)
 
-                if len(self._driver.window_handles) != 2:
-                    logger.debug("Couldn't click to shopping ad! Trying again...")
-
-                    actions = ActionChains(self._driver)
-                    actions.move_to_element(ad_link_element)
-                    actions.key_down(control_command_key)
-                    actions.click()
-                    actions.key_up(control_command_key)
-                    actions.perform()
-                    sleep(get_random_sleep(0.5, 1))
-
+                if config.behavior.send_to_android and self._android_device_id:
+                    self._handle_android_click(ad_link_element, True, category="Shopping")
                 else:
-                    logger.debug("Opened link in new a tab. Switching to tab...")
-
-                for window_handle in self._driver.window_handles:
-                    if window_handle != original_window_handle:
-                        self._driver.switch_to.window(window_handle)
-
-                        click_time = datetime.now().strftime("%H:%M:%S")
-
-                        # wait a little before starting random actions
-                        sleep(get_random_sleep(3, 6))
-
-                        logger.debug(f"Current url on new tab: {self._driver.current_url}")
-
-                        random_scroll_thread = Thread(target=self._make_random_scrolls)
-                        random_scroll_thread.start()
-                        random_mouse_thread = Thread(target=self._make_random_mouse_movements)
-                        random_mouse_thread.start()
-
-                        wait_time = random.choice(
-                            range(self._ad_page_min_wait, self._ad_page_max_wait)
-                        )
-                        logger.debug(f"Waiting {wait_time} seconds on shopping ad page...")
-
-                        self._stats.shopping_ads_clicked += 1
-                        self._clicklogs_db_client.save_click(
-                            site_url="/".join(self._driver.current_url.split("/", maxsplit=3)[:3]),
-                            category="Shopping",
-                            query=self._search_query,
-                            click_time=click_time,
-                        )
-
-                        sleep(wait_time)
-
-                        random_scroll_thread.join(timeout=float(self._ad_page_max_wait))
-                        random_mouse_thread.join(timeout=float(self._ad_page_max_wait))
-
-                        self._driver.close()
-                        break
-
-                # go back to original window
-                self._driver.switch_to.window(original_window_handle)
-                sleep(get_random_sleep(1, 1.5))
+                    self._handle_browser_click(
+                        ad_link_element,
+                        ad_canon_link,
+                        True,
+                        original_window_handle,
+                        category="Shopping",
+                    )
 
             except Exception:
                 logger.debug(f"Failed to click ad element [{ad_title}]!")
@@ -262,12 +212,8 @@ class SearchController:
         """Click links
 
         :type links: AllLinks
-        :param links: List of [(ad, ad_link, ad_title), non_ad_links]
+        :param links: List of [(ad, ad_link, ad_title, ad_canon_link), non_ad_links]
         """
-
-        platform = sys.platform
-
-        control_command_key = Keys.COMMAND if platform.endswith("darwin") else Keys.CONTROL
 
         # store the ID of the original window
         original_window_handle = self._driver.current_window_handle
@@ -276,19 +222,21 @@ class SearchController:
             is_ad_element = isinstance(link, tuple)
 
             try:
+                category = "Ad" if is_ad_element else "Non-ad"
+
                 if is_ad_element:
-                    link_element = link[0]
-                    link_url = link[1]
-                    ad_title = link[2]
-                    canon_link = link[3]
+                    link_element, link_url, ad_title, canon_link = self._extract_link_info(
+                        link, category
+                    )
 
                     if self._hooks_enabled:
                         hooks.before_ad_click_hook(self._driver)
 
                     logger.info(f"Clicking to [{ad_title}]({link_url}) | '{canon_link}'...")
                 else:
-                    link_element = link
-                    link_url = link_element.get_attribute("href")
+                    link_element, link_url, ad_title, canon_link = self._extract_link_info(
+                        link, category
+                    )
 
                     logger.info(f"Clicking to [{link_url}]...")
 
@@ -296,99 +244,237 @@ class SearchController:
                 self._driver.execute_script("arguments[0].scrollIntoView(true);", link_element)
                 sleep(get_random_sleep(0.5, 1))
 
-                # open link in a different tab
-                actions = ActionChains(self._driver)
-                actions.move_to_element(link_element)
-                actions.key_down(control_command_key)
-                actions.click()
-                actions.key_up(control_command_key)
-                actions.perform()
-                sleep(get_random_sleep(0.5, 1))
-
-                if len(self._driver.window_handles) != 2:
-                    logger.debug("Couldn't click! Scrolling element into view...")
-
-                    self._driver.execute_script("arguments[0].scrollIntoView(true);", link_element)
-
-                    actions = ActionChains(self._driver)
-                    actions.move_to_element(link_element)
-                    actions.key_down(control_command_key)
-                    actions.click()
-                    actions.key_up(control_command_key)
-                    actions.perform()
-                    sleep(get_random_sleep(0.5, 1))
-
+                if config.behavior.send_to_android and self._android_device_id:
+                    self._handle_android_click(link_element, is_ad_element, category)
                 else:
-                    logger.debug("Opened link in a new tab. Switching to tab...")
-
-                for window_handle in self._driver.window_handles:
-                    if window_handle != original_window_handle:
-                        self._driver.switch_to.window(window_handle)
-
-                        click_time = datetime.now().strftime("%H:%M:%S")
-
-                        # wait a little before starting random actions
-                        sleep(get_random_sleep(3, 6))
-
-                        logger.debug(f"Current url on new tab: {self._driver.current_url}")
-
-                        if self._hooks_enabled:
-                            hooks.after_ad_click_hook(self._driver)
-
-                        random_scroll_thread = Thread(target=self._make_random_scrolls)
-                        random_scroll_thread.start()
-                        random_mouse_thread = Thread(target=self._make_random_mouse_movements)
-                        random_mouse_thread.start()
-
-                        if is_ad_element:
-                            wait_time = random.choice(
-                                range(self._ad_page_min_wait, self._ad_page_max_wait)
-                            )
-                            logger.debug(f"Waiting {wait_time} seconds on ad page...")
-
-                            self._stats.ads_clicked += 1
-                            self._clicklogs_db_client.save_click(
-                                site_url=canon_link,
-                                category="Ad",
-                                query=self._search_query,
-                                click_time=click_time,
-                            )
-
-                            sleep(wait_time)
-                        else:
-                            wait_time = random.choice(
-                                range(self._nonad_page_min_wait, self._nonad_page_max_wait)
-                            )
-                            logger.debug(f"Waiting {wait_time} seconds on non-ad page...")
-
-                            self._stats.non_ads_clicked += 1
-                            self._clicklogs_db_client.save_click(
-                                site_url=self._driver.current_url,
-                                category="Non-ad",
-                                query=self._search_query,
-                                click_time=click_time,
-                            )
-
-                            sleep(wait_time)
-
-                        random_scroll_thread.join(
-                            timeout=float(max(self._ad_page_max_wait, self._nonad_page_max_wait))
-                        )
-                        random_mouse_thread.join(
-                            timeout=float(max(self._ad_page_max_wait, self._nonad_page_max_wait))
-                        )
-
-                        self._driver.close()
-                        break
-
-                # go back to original window
-                self._driver.switch_to.window(original_window_handle)
-                sleep(get_random_sleep(1, 1.5))
+                    self._handle_browser_click(
+                        link_element, canon_link, is_ad_element, original_window_handle, category
+                    )
 
             except StaleElementReferenceException:
                 logger.debug(
                     f"Ad element [{ad_title if is_ad_element else link_url}] has changed. Skipping scroll into view..."
                 )
+
+            except Exception:
+                logger.error(f"Failed to click on [{ad_title if is_ad_element else link_url}]!")
+
+    def _extract_link_info(self, link: Any, category: str) -> tuple:
+        """Extract link information
+
+        :type link: tuple(ad, ad_link, ad_title, ad_canon_link) or LinkElement
+        :param link: (ad, ad_link, ad_title, ad_canon_link) for ads LinkElement for non-ads
+        :type category: str
+        :param category: Specifies link category as Ad, Non-ad, or Shopping
+        :rtype: tuple
+        :returns: (link_element, link_url, ad_title, canon_link) tuple
+        """
+
+        if category == "Ad":
+            link_element = link[0]
+            link_url = link[1]
+            ad_title = link[2]
+            canon_link = link[3]
+
+        elif category == "Non-ad":
+            link_element = link
+            link_url = link.get_attribute("href")
+            ad_title = None
+            canon_link = None
+
+        elif category == "Shopping":
+            link_element = link[0]
+            link_url = link[1]
+            ad_title = link[2].replace("\n", " ")
+            canon_link = link[3]
+
+        return (link_element, link_url, ad_title, canon_link)
+
+    def _handle_android_click(
+        self,
+        link_element: selenium.webdriver.remote.webelement.WebElement,
+        is_ad_element: bool,
+        category: str = "Ad",
+    ) -> None:
+        """Handle opening link on Android device
+
+        :type link_element: selenium.webdriver.remote.webelement.WebElement
+        :param link_element: Link element
+        :type is_ad_element: bool
+        :param is_ad_element: Whether it is an ad or non-ad link
+        :type category: str
+        :param category: Specifies link category as Ad, Non-ad, or Shopping
+        """
+
+        url = resolve_redirect(link_element.get_attribute("href"))
+
+        adb_controller.open_url(url, self._android_device_id)
+
+        click_time = datetime.now().strftime("%H:%M:%S")
+
+        # wait a little before starting random actions
+        sleep(get_random_sleep(2, 3))
+
+        logger.debug(f"Current url on device: {url}")
+
+        if self._hooks_enabled and category in ("Ad", "Shopping"):
+            hooks.after_ad_click_hook(self._driver)
+
+        self._start_random_scroll_thread()
+
+        site_url = "/".join(url.split("/", maxsplit=3)[:3])
+
+        self._update_click_stats(site_url, click_time, category)
+
+        wait_time = self._get_wait_time(is_ad_element)
+        logger.debug(f"Waiting {wait_time} seconds on {category.lower()} page...")
+        sleep(wait_time)
+
+        adb_controller.close_browser()
+        sleep(get_random_sleep(0.5, 1))
+
+    def _handle_browser_click(
+        self,
+        link_element: selenium.webdriver.remote.webelement.WebElement,
+        link_url: str,
+        is_ad_element: bool,
+        original_window_handle: str,
+        category: str = "Ad",
+    ) -> None:
+        """Handle clicking in the browser
+
+        :type link_element: selenium.webdriver.remote.webelement.WebElement
+        :param link_element: Link element
+        :type link_url: str
+        :param link_url: Canonical url for the clicked link
+        :type is_ad_element: bool
+        :param is_ad_element: Whether it is an ad or non-ad link
+        :type original_window_handle: str
+        :param original_window_handle: Window handle for the search results tab
+        :type category: str
+        :param category: Specifies link category as Ad, Non-ad, or Shopping
+        """
+
+        self._open_link_in_new_tab(link_element)
+
+        if len(self._driver.window_handles) != 2:
+            logger.debug("Couldn't click! Scrolling element into view...")
+            self._driver.execute_script("arguments[0].scrollIntoView(true);", link_element)
+            self._open_link_in_new_tab(link_element)
+
+        logger.debug("Opened link in a new tab. Switching to tab...")
+
+        for window_handle in self._driver.window_handles:
+            if window_handle != original_window_handle:
+                self._driver.switch_to.window(window_handle)
+                click_time = datetime.now().strftime("%H:%M:%S")
+
+                sleep(get_random_sleep(3, 5))
+                logger.debug(f"Current url on new tab: {self._driver.current_url}")
+
+                if self._hooks_enabled and category in ("Ad", "Shopping"):
+                    hooks.after_ad_click_hook(self._driver)
+
+                self._start_random_action_threads()
+
+                url = (
+                    "/".join(self._driver.current_url.split("/", maxsplit=3)[:3])
+                    if category == "Shopping"
+                    else (link_url if is_ad_element else self._driver.current_url)
+                )
+
+                self._update_click_stats(url, click_time, category)
+
+                wait_time = self._get_wait_time(is_ad_element)
+                logger.debug(f"Waiting {wait_time} seconds on {category.lower()} page...")
+                sleep(wait_time)
+
+                self._driver.close()
+                break
+
+        # go back to the original window
+        self._driver.switch_to.window(original_window_handle)
+        sleep(get_random_sleep(1, 1.5))
+
+    def _open_link_in_new_tab(
+        self, link_element: selenium.webdriver.remote.webelement.WebElement
+    ) -> None:
+        """Open the link in a new browser tab
+
+        :type link_element: selenium.webdriver.remote.webelement.WebElement
+        :param link_element: Link element
+        """
+
+        platform = sys.platform
+        control_command_key = Keys.COMMAND if platform.endswith("darwin") else Keys.CONTROL
+
+        actions = ActionChains(self._driver)
+        actions.move_to_element(link_element)
+        actions.key_down(control_command_key)
+        actions.click()
+        actions.key_up(control_command_key)
+        actions.perform()
+
+        sleep(get_random_sleep(0.5, 1))
+
+    def _get_wait_time(self, is_ad_element: bool) -> int:
+        """Get wait time based on whether the link is an ad or non-ad
+
+        :type is_ad_element: bool
+        :param is_ad_element: Whether it is an ad or non-ad link
+        :rtype: int
+        :returns: Randomly selected number from the given range
+        """
+
+        if is_ad_element:
+            return random.choice(range(self._ad_page_min_wait, self._ad_page_max_wait))
+        else:
+            return random.choice(range(self._nonad_page_min_wait, self._nonad_page_max_wait))
+
+    def _update_click_stats(self, url: str, click_time: str, category: str) -> None:
+        """Update click statistics
+
+        :type url: str
+        :param url: Clicked link url to save db
+        :type click_time: str
+        :param click_time: Click time in hh:mm:ss format
+        :type category: str
+        :param category: Specifies link category as Ad, Non-ad, or Shopping
+        """
+
+        if category == "Ad":
+            self._stats.ads_clicked += 1
+        elif category == "Non-ad":
+            self._stats.non_ads_clicked += 1
+        elif category == "Shopping":
+            self._stats.shopping_ads_clicked += 1
+
+        self._clicklogs_db_client.save_click(
+            site_url=url, category=category, query=self._search_query, click_time=click_time
+        )
+
+    def _start_random_scroll_thread(self) -> None:
+        """Start a thread for random swipes on Android device"""
+
+        random_scroll_thread = Thread(target=self._make_random_swipes)
+        random_scroll_thread.start()
+        random_scroll_thread.join(
+            timeout=float(max(self._ad_page_max_wait, self._nonad_page_max_wait))
+        )
+
+    def _start_random_action_threads(self) -> None:
+        """Start threads for random actions on browser"""
+
+        random_scroll_thread = Thread(target=self._make_random_scrolls)
+        random_scroll_thread.start()
+        random_mouse_thread = Thread(target=self._make_random_mouse_movements)
+        random_mouse_thread.start()
+        random_scroll_thread.join(
+            timeout=float(max(self._ad_page_max_wait, self._nonad_page_max_wait))
+        )
+        random_mouse_thread.join(
+            timeout=float(max(self._ad_page_max_wait, self._nonad_page_max_wait))
+        )
 
     def end_search(self) -> None:
         """Close the browser.
@@ -423,8 +509,7 @@ class SearchController:
         try:
             logger.info("Checking shopping ads...")
 
-            s_ads_container = self._driver.find_element(*self.TOP_ADS_CONTAINER)
-            shopping_ads = s_ads_container.find_elements(*self.SHOPPING_ADS_CONTAINER)
+            shopping_ads = self._driver.find_elements(*self.SHOPPING_ADS_CONTAINER)
 
             if shopping_ads:
                 for shopping_ad in shopping_ads[:5]:
@@ -822,6 +907,78 @@ class SearchController:
 
         self._driver.find_element(By.TAG_NAME, "body").send_keys(Keys.HOME)
 
+    def _make_random_swipes(self) -> None:
+        """Make random swipes on page"""
+
+        logger.debug("Making random swipes...")
+
+        directions = [Direction.DOWN, Direction.DOWN]
+        directions += random.choices(
+            [Direction.UP] * 5 + [Direction.DOWN] * 5, k=random.choice(range(1, 5))
+        )
+
+        logger.debug(f"Direction choices: {[d.value for d in directions]}")
+
+        for direction in directions:
+            if direction == Direction.DOWN:
+                self._send_swipe(direction=Direction.DOWN)
+
+            elif direction == Direction.UP:
+                self._send_swipe(direction=Direction.UP)
+
+            sleep(get_random_sleep(1, 2))
+
+        HOME_KEYCODE = 122
+        adb_controller.send_keyevent(HOME_KEYCODE)  # go to top by sending Home key
+
+    def _send_swipe(self, direction: Direction) -> None:
+        """Send swipe action to mobile device
+
+        :type direction: Direction
+        :param direction: Direction to swipe
+        """
+
+        x_position = random.choice(range(100, 200))
+        duration = random.choice(range(100, 500))
+
+        if direction == Direction.DOWN:
+            y_start_position = random.choice(range(1000, 1500))
+            y_end_position = random.choice(range(500, 1000))
+
+        elif direction == Direction.UP:
+            y_start_position = random.choice(range(500, 1000))
+            y_end_position = random.choice(range(1000, 1500))
+
+        adb_controller.send_swipe(
+            x1=x_position,
+            y1=y_start_position,
+            x2=x_position,
+            y2=y_end_position,
+            duration=duration,
+        )
+
+    def _make_random_scrolls(self) -> None:
+        """Make random scrolls on page"""
+
+        logger.debug("Making random scrolls...")
+
+        directions = [Direction.DOWN]
+        directions += random.choices(
+            [Direction.UP] * 5 + [Direction.DOWN] * 5, k=random.choice(range(1, 5))
+        )
+
+        logger.debug(f"Direction choices: {[d.value for d in directions]}")
+
+        for direction in directions:
+            if direction == Direction.DOWN and not self._is_scroll_at_the_end():
+                self._driver.find_element(By.TAG_NAME, "body").send_keys(Keys.PAGE_DOWN)
+            elif direction == Direction.UP:
+                self._driver.find_element(By.TAG_NAME, "body").send_keys(Keys.PAGE_UP)
+
+            sleep(get_random_sleep(1, 3))
+
+        self._driver.find_element(By.TAG_NAME, "body").send_keys(Keys.HOME)
+
     def _make_random_mouse_movements(self) -> None:
         """Make random mouse movements"""
 
@@ -948,6 +1105,17 @@ class SearchController:
         """
 
         self._stats.browser_id = browser_id
+
+    def assign_android_device(self, device_id: str) -> None:
+        """Assign Android device to browser
+
+        :type device_id: str
+        :param device_id: Android device ID to assign
+        """
+
+        logger.info(f"Assigning device[{device_id}] to browser {self._stats.browser_id}")
+
+        self._android_device_id = device_id
 
     @staticmethod
     def _process_query(query: str) -> tuple[str, list[str]]:

@@ -5,14 +5,18 @@ from concurrent.futures import ProcessPoolExecutor, wait
 from itertools import cycle
 from pathlib import Path
 from time import sleep
+from typing import Optional
 
+from adb import adb_controller
 from logger import logger
 from config_reader import config
 from proxy import get_proxies
 from utils import get_queries
 
 
-def start_tool(browser_id: int, query: str, proxy: str, start_timeout: float) -> None:
+def start_tool(
+    browser_id: int, query: str, proxy: str, start_timeout: float, device_id: Optional[str] = None
+) -> None:
     """Start the tool
 
     :type browser_id: int
@@ -23,12 +27,17 @@ def start_tool(browser_id: int, query: str, proxy: str, start_timeout: float) ->
     :param proxy: Proxy to use in ip:port or user:pass@host:port format
     :type start_timeout: float
     :param start_timeout: Start timeout to avoid race condition in driver patching
+    :type device_id: str
+    :param device_id: Android device ID to assign
     """
 
     sleep(start_timeout)
 
     command = ["python", "ad_clicker.py"]
     command.extend(["-q", query, "-p", proxy, "--id", str(browser_id)])
+
+    if device_id:
+        command.extend(["-d", device_id])
 
     subprocess.run(command)
 
@@ -61,13 +70,28 @@ def main() -> None:
     else:
         raise SystemExit("Missing proxy_file parameter!")
 
+    if config.behavior.send_to_android:
+        adb_controller.get_connected_devices()
+        devices = adb_controller.devices
+        random.shuffle(devices)
+        device_ids = devices + [None] * (MAX_WORKERS - len(devices))
+    else:
+        device_ids = [None] * MAX_WORKERS
+
     logger.info(f"Running with {MAX_WORKERS} browser{'s' if MAX_WORKERS > 1 else ''}...")
 
     # 1st way - different query on each browser (default)
     if config.behavior.multiprocess_style == 1:
         with ProcessPoolExecutor(max_workers=MAX_WORKERS) as executor:
             futures = [
-                executor.submit(start_tool, i, next(query), next(proxy), start_timeout=i * 0.5)
+                executor.submit(
+                    start_tool,
+                    i,
+                    next(query),
+                    next(proxy),
+                    start_timeout=i * 0.5,
+                    device_id=device_ids[i - 1],
+                )
                 for i in range(1, MAX_WORKERS + 1)
             ]
 
@@ -81,9 +105,21 @@ def main() -> None:
             random.shuffle(proxies)
             proxy = cycle(proxies)
 
+            if config.behavior.send_to_android:
+                devices = adb_controller.devices
+                random.shuffle(devices)
+                device_ids = devices + [None] * (MAX_WORKERS - len(devices))
+
             with ProcessPoolExecutor(max_workers=MAX_WORKERS) as executor:
                 futures = [
-                    executor.submit(start_tool, i, query, next(proxy), start_timeout=i * 0.5)
+                    executor.submit(
+                        start_tool,
+                        i,
+                        query,
+                        next(proxy),
+                        start_timeout=i * 0.5,
+                        device_id=device_ids[i - 1],
+                    )
                     for i in range(1, MAX_WORKERS + 1)
                 ]
 

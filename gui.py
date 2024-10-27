@@ -340,6 +340,9 @@ class BehaviorFrame(customtkinter.CTkFrame):
         self._telegram_enabled_value = self._add_checkbox(
             row=9, column=4, label="Telegram enabled", enabled=config.behavior.telegram_enabled
         )
+        self._send_to_android_value = self._add_checkbox(
+            row=9, column=5, label="Send to Android", enabled=config.behavior.send_to_android
+        )
 
     def get_behavior_config(self) -> dict[str, str]:
         """Get behavior config values
@@ -368,6 +371,7 @@ class BehaviorFrame(customtkinter.CTkFrame):
             "2captcha_apikey": self._2captcha_apikey_input.get("1.0", "end-1c"),
             "hooks_enabled": self._hooks_enabled_value.get(),
             "telegram_enabled": self._telegram_enabled_value.get(),
+            "send_to_android": self._send_to_android_value.get(),
         }
 
     def _add_input_field(
