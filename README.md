@@ -326,6 +326,27 @@ Apply the following steps for once to enable Telegram notifications.
 
 <br>
 
+## Troubleshooting
+
+#### 1. ValueError: max() arg is an empty sequence
+
+* If you see this error, run the following commands.
+
+    1. Delete `.MULTI_BROWSERS_IN_USE` file if exists.
+        * `rm .MULTI_BROWSERS_IN_USE` for Linux or `del .MULTI_BROWSERS_IN_USE` for Windows.
+
+    2. Run `python ad_clicker.py -q test` and end it by pressing CTRL+C after seeing the browser opened.
+
+    3. Continue with one of the commands from [How to run](#how-to-run) section.
+
+#### 2. Chrome version mismatch error
+
+* If you get an error like **"This version of ChromeDriver only supports Chrome version ... Current browser version is ..."**, it means you are using an older Chrome version and should update to the latest one.
+
+* You may need to apply [solution from the previous section](#1-valueerror-max-arg-is-an-empty-sequence) for some cases.
+
+<br>
+
 ## Support
 
 [https://coskundeniz.github.io/ad_clicker](https://coskundeniz.github.io/ad_clicker)

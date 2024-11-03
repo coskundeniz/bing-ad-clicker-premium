@@ -13,6 +13,7 @@ from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.common.exceptions import (
+    JavascriptException,
     TimeoutException,
     NoSuchElementException,
     StaleElementReferenceException,
@@ -362,7 +363,11 @@ class SearchController:
             self._driver.execute_script("arguments[0].scrollIntoView(true);", link_element)
             self._open_link_in_new_tab(link_element)
 
-        logger.debug("Opened link in a new tab. Switching to tab...")
+        if len(self._driver.window_handles) != 2:
+            logger.debug(f"Failed to open '{link_url}' in a new tab!")
+            return
+        else:
+            logger.debug("Opened link in a new tab. Switching to tab...")
 
         for window_handle in self._driver.window_handles:
             if window_handle != original_window_handle:
@@ -408,14 +413,24 @@ class SearchController:
         platform = sys.platform
         control_command_key = Keys.COMMAND if platform.endswith("darwin") else Keys.CONTROL
 
-        actions = ActionChains(self._driver)
-        actions.move_to_element(link_element)
-        actions.key_down(control_command_key)
-        actions.click()
-        actions.key_up(control_command_key)
-        actions.perform()
+        try:
+            actions = ActionChains(self._driver)
+            actions.move_to_element(link_element)
+            actions.key_down(control_command_key)
+            actions.click()
+            actions.key_up(control_command_key)
+            actions.perform()
 
-        sleep(get_random_sleep(0.5, 1))
+            sleep(get_random_sleep(0.5, 1))
+
+        except JavascriptException as exp:
+            error_message = str(exp).split("\n")[0]
+
+            if "has no size and location" in error_message:
+                logger.error(
+                    f"Failed to click element[{link_element.get_attribute('outerHTML')}]! "
+                    "Skipping..."
+                )
 
     def _get_wait_time(self, is_ad_element: bool) -> int:
         """Get wait time based on whether the link is an ad or non-ad
@@ -983,57 +998,70 @@ class SearchController:
         """Make random mouse movements"""
 
         if self._random_mouse_enabled:
-            import pyautogui
+            try:
+                import pyautogui
 
-            logger.debug("Making random mouse movements...")
+                logger.debug("Making random mouse movements...")
 
-            screen_width, screen_height = pyautogui.size()
-            pyautogui.moveTo(screen_width / 2 - 300, screen_height / 2 - 200)
-
-            logger.debug(pyautogui.position())
-
-            ease_methods = [pyautogui.easeInQuad, pyautogui.easeOutQuad, pyautogui.easeInOutQuad]
-
-            logger.debug("Going LEFT and DOWN...")
-
-            pyautogui.move(
-                -random.choice(range(200, 300)),
-                random.choice(range(250, 450)),
-                1,
-                random.choice(ease_methods),
-            )
-
-            logger.debug(pyautogui.position())
-
-            for _ in range(1, random.choice(range(3, 7))):
-                direction = random.choice(list(Direction))
-                ease_method = random.choice(ease_methods)
-
-                logger.debug(f"Going {direction.value}...")
-
-                if direction == Direction.LEFT:
-                    pyautogui.move(-(random.choice(range(100, 200))), 0, 0.5, ease_method)
-
-                elif direction == Direction.RIGHT:
-                    pyautogui.move(random.choice(range(200, 400)), 0, 0.3, ease_method)
-
-                elif direction == Direction.UP:
-                    pyautogui.move(0, -(random.choice(range(100, 200))), 1, ease_method)
-                    pyautogui.scroll(random.choice(range(1, 7)))
-
-                elif direction == Direction.DOWN:
-                    pyautogui.move(0, random.choice(range(150, 300)), 0.7, ease_method)
-                    pyautogui.scroll(-random.choice(range(1, 7)))
-
-                else:
-                    pyautogui.move(
-                        random.choice(range(100, 200)),
-                        random.choice(range(150, 250)),
-                        1,
-                        ease_method,
-                    )
+                screen_width, screen_height = pyautogui.size()
+                pyautogui.moveTo(screen_width / 2 - 300, screen_height / 2 - 200)
 
                 logger.debug(pyautogui.position())
+
+                ease_methods = [
+                    pyautogui.easeInQuad,
+                    pyautogui.easeOutQuad,
+                    pyautogui.easeInOutQuad,
+                ]
+
+                logger.debug("Going LEFT and DOWN...")
+
+                pyautogui.move(
+                    -random.choice(range(200, 300)),
+                    random.choice(range(250, 450)),
+                    1,
+                    random.choice(ease_methods),
+                )
+
+                logger.debug(pyautogui.position())
+
+                for _ in range(1, random.choice(range(3, 7))):
+                    direction = random.choice(list(Direction))
+                    ease_method = random.choice(ease_methods)
+
+                    logger.debug(f"Going {direction.value}...")
+
+                    if direction == Direction.LEFT:
+                        pyautogui.move(-(random.choice(range(100, 200))), 0, 0.5, ease_method)
+
+                    elif direction == Direction.RIGHT:
+                        pyautogui.move(random.choice(range(200, 400)), 0, 0.3, ease_method)
+
+                    elif direction == Direction.UP:
+                        pyautogui.move(0, -(random.choice(range(100, 200))), 1, ease_method)
+                        pyautogui.scroll(random.choice(range(1, 7)))
+
+                    elif direction == Direction.DOWN:
+                        pyautogui.move(0, random.choice(range(150, 300)), 0.7, ease_method)
+                        pyautogui.scroll(-random.choice(range(1, 7)))
+
+                    else:
+                        pyautogui.move(
+                            random.choice(range(100, 200)),
+                            random.choice(range(150, 250)),
+                            1,
+                            ease_method,
+                        )
+
+                    logger.debug(pyautogui.position())
+
+            except pyautogui.FailSafeException:
+                logger.debug("The mouse cursor was moved to one of the screen corners!")
+
+                pyautogui.FAILSAFE = False
+
+                logger.debug("Moving cursor to center...")
+                pyautogui.moveTo(screen_width / 2, screen_height / 2)
 
     def _check_captcha(self) -> None:
         """Check if captcha exists and solve it if 2captcha is used, otherwise exit"""
