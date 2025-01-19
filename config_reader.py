@@ -42,6 +42,7 @@ class BehaviorParams:
     browser_count: Optional[int] = 2
     multiprocess_style: Optional[int] = 1
     loop_wait_time: Optional[int] = 60
+    wait_factor: Optional[float] = 1.0
     running_interval_start: Optional[str] = ""
     running_interval_end: Optional[str] = ""
     twocaptcha_apikey: Optional[str] = ""
@@ -111,6 +112,7 @@ class ConfigReader:
             browser_count=multiprocessing.cpu_count() if browser_count == 0 else browser_count,
             multiprocess_style=config["behavior"]["multiprocess_style"],
             loop_wait_time=config["behavior"]["loop_wait_time"],
+            wait_factor=config["behavior"]["wait_factor"],
             running_interval_start=config["behavior"]["running_interval_start"],
             running_interval_end=config["behavior"]["running_interval_end"],
             twocaptcha_apikey=config["behavior"]["2captcha_apikey"],

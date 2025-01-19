@@ -30,6 +30,7 @@
         "browser_count": 2,
         "multiprocess_style": 1,
         "loop_wait_time": 60,
+        "wait_factor": 1.0,
         "running_interval_start": "00:00",
         "running_interval_end": "00:00",
         "2captcha_apikey": "",

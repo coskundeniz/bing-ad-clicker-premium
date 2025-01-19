@@ -315,6 +315,9 @@ class BehaviorFrame(customtkinter.CTkFrame):
         self._loop_wait_time_input = self._add_input_field(
             row=7, column=0, label="Loop wait time", default_value=config.behavior.loop_wait_time
         )
+        self._wait_factor_input = self._add_input_field(
+            row=7, column=3, label="Wait factor", default_value=config.behavior.wait_factor
+        )
 
         excludes_label = customtkinter.CTkLabel(self, text="Excludes")
         excludes_label.grid(row=8, column=0, padx=10, sticky="w")
@@ -366,6 +369,7 @@ class BehaviorFrame(customtkinter.CTkFrame):
             "browser_count": int(self._browser_count_input.get("1.0", "end-1c")),
             "multiprocess_style": int(self._multiprocess_style_input.get("1.0", "end-1c")),
             "loop_wait_time": int(self._loop_wait_time_input.get("1.0", "end-1c")),
+            "wait_factor": float(self._wait_factor_input.get("1.0", "end-1c")),
             "running_interval_start": self._running_interval_start_input.get("1.0", "end-1c"),
             "running_interval_end": self._running_interval_end_input.get("1.0", "end-1c"),
             "2captcha_apikey": self._2captcha_apikey_input.get("1.0", "end-1c"),

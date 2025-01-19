@@ -40,7 +40,7 @@ class CustomChrome(undetected_chromedriver.Chrome):
             if IS_POSIX:
                 os.waitpid(self.browser_pid, 0)
             else:
-                sleep(0.05)
+                sleep(0.05 * config.behavior.wait_factor)
         except (AttributeError, ChildProcessError, RuntimeError, OSError):
             pass
         except TimeoutError as e:
@@ -78,7 +78,7 @@ class CustomChrome(undetected_chromedriver.Chrome):
                     # logger.debug("successfully removed %s" % self.user_data_dir)
                     break
 
-                sleep(0.1)
+                sleep(0.1 * config.behavior.wait_factor)
 
         # dereference patcher, so patcher can start cleaning up as well.
         # this must come last, otherwise it will throw 'in use' errors
@@ -114,7 +114,7 @@ class CustomChrome(undetected_chromedriver.Chrome):
                 except Exception:
                     pass
             else:
-                sleep(0.05)
+                sleep(0.05 * config.behavior.wait_factor)
 
 
 def create_webdriver(
@@ -203,7 +203,7 @@ def create_webdriver(
             host, port = proxy.split("@")[1].split(":")
 
             install_plugin(chrome_options, host, int(port), username, password, plugin_folder_name)
-            sleep(2)
+            sleep(2 * config.behavior.wait_factor)
 
         else:
             chrome_options.add_argument(f"--proxy-server={proxy}")
@@ -287,7 +287,7 @@ def create_webdriver(
         logger.debug(f"Setting window position as ({new_x},{new_y})...")
 
         driver.set_window_position(new_x, new_y)
-        sleep(get_random_sleep(0.1, 0.5))
+        sleep(get_random_sleep(0.1, 0.5) * config.behavior.wait_factor)
 
     return (driver, country_code) if config.webdriver.country_domain else (driver, None)
 

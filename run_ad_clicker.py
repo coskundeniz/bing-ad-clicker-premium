@@ -31,7 +31,7 @@ def start_tool(
     :param device_id: Android device ID to assign
     """
 
-    sleep(start_timeout)
+    sleep(start_timeout * config.behavior.wait_factor)
 
     command = ["python", "ad_clicker.py"]
     command.extend(["-q", query, "-p", proxy, "--id", str(browser_id)])

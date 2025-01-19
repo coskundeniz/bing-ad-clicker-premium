@@ -138,10 +138,12 @@ def get_location(geolocation_db_client: GeolocationDB, proxy: str) -> tuple[floa
                         if cycle == 1:
                             break
 
-                        logger.info("Request will be resend after 60 seconds")
-                        sleep(60)
+                        request_retry_timeout = 60 * config.behavior.wait_factor
+                        logger.info(f"Request will be resend after {request_retry_timeout} seconds")
 
-            sleep(get_random_sleep(0.5, 1))
+                        sleep(request_retry_timeout)
+
+            sleep(get_random_sleep(0.5, 1) * config.behavior.wait_factor)
     else:
         ip_address = proxy.split(":")[0]
 
@@ -186,7 +188,7 @@ def get_location(geolocation_db_client: GeolocationDB, proxy: str) -> tuple[floa
     else:
         retry_count = 0
         max_retry_count = 5
-        sleep_seconds = 5
+        sleep_seconds = 5 * config.behavior.wait_factor
 
         while retry_count < max_retry_count:
             try:
@@ -251,7 +253,7 @@ def get_location(geolocation_db_client: GeolocationDB, proxy: str) -> tuple[floa
                         sleep(sleep_seconds)
                         sleep_seconds *= 2
 
-            sleep(0.5)
+            sleep(0.5 * config.behavior.wait_factor)
 
         if latitude and longitude and country_code:
             logger.debug(f"Latitude and longitude for {ip_address}: ({latitude}, {longitude})")
@@ -400,7 +402,8 @@ def solve_recaptcha(
             request_retry_count += 1
             continue
 
-    sleep(15)
+    initial_captcha_response_wait = 15
+    sleep(initial_captcha_response_wait * config.behavior.wait_factor)
 
     # check if the CAPTCHA has been solved
     response_api_url = "http://2captcha.com/res.php"
@@ -448,7 +451,7 @@ def take_screenshot(driver: undetected_chromedriver.Chrome) -> None:
 
     if driver:
         driver.save_screenshot(filename)
-        sleep(get_random_sleep(1, 1.5))
+        sleep(get_random_sleep(1, 1.5) * config.behavior.wait_factor)
         logger.info(f"Saved screenshot during exception as {filename}")
 
 
@@ -529,6 +532,7 @@ def _check_error(response_text: str, request_type: str = "in_php") -> tuple[bool
     logger.debug("Checking error code...")
 
     error_to_exit, error_to_continue, error_to_break = False, False, False
+    error_wait = 5 * config.behavior.wait_factor
 
     if request_type == "in_php":
         if "ERROR_WRONG_USER_KEY" in response_text or "ERROR_KEY_DOES_NOT_EXIST" in response_text:
@@ -543,8 +547,8 @@ def _check_error(response_text: str, request_type: str = "in_php") -> tuple[bool
             logger.error(
                 "The queue of your captchas that are not distributed to workers is too long."
             )
-            logger.info("Waiting 5 seconds before sending new request...")
-            sleep(5)
+            logger.info(f"Waiting {error_wait} seconds before sending new request...")
+            sleep(error_wait)
 
             error_to_continue = True
 
@@ -572,8 +576,8 @@ def _check_error(response_text: str, request_type: str = "in_php") -> tuple[bool
             error_to_exit = True
 
         elif "CAPCHA_NOT_READY" in response_text:
-            logger.info("Waiting 5 seconds before checking response again...")
-            sleep(5)
+            logger.info(f"Waiting {error_wait} seconds before checking response again...")
+            sleep(error_wait)
 
             error_to_continue = True
 

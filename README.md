@@ -4,28 +4,31 @@ This command-line tool clicks ads for a certain query on Bing search using [unde
 
 * Additional Features in Premium
 
-    * Single config file for all options
-    * Desktop UI for configuration and run
-    * Clear cache and cookies on browser exit
-    * External file for user agents
-    * Set browser window size
-    * Shift browser windows by random offsets
-    * Set opening URL based on the proxy country
-    * Set browser language based on the proxy country
-    * Random scrolls and mouse movements on pages
-    * Click non-ad links with domain filtering or in random
-    * Custom click order between ad and non-ad links
-    * Set min/max waiting range for ad and non-ad pages
-    * Limit max scroll on the search results page
-    * Use custom collected cookies
-    * Set the running interval time
-    * Summary of statistics
-    * Click on the top shopping ads up to 5
-    * 2captcha integration
-    * Telegram notification
-    * Generate daily click report
-    * Open found links on Android device
-    * Hooks for extending the tool with custom behavior
+    * 🛠️ Single config file for all options
+    * 🖥️ Desktop UI for configuration and run
+    * 🗑️ Clear cache and cookies on browser exit
+    * 📄 External file for user agents
+    * 🖼️ Set browser window size
+    * 🎲 Shift browser windows by random offsets
+    * 🌍 Set opening URL based on the proxy country
+    * 🈵 Set browser language based on the proxy country
+    * 🖱️ Random scrolls and mouse movements on pages
+    * 🔗 Click non-ad links with domain filtering or in random
+    * 🔄 Custom click order between ad and non-ad links
+    * ⏱️ Set min/max waiting range for ad and non-ad pages
+    * 📜 Limit max scroll on the search results page
+    * 🍪 Use custom collected cookies
+    * ⏳ Set the running interval time
+    * 📊 Summary of statistics
+    * 🛍️ Click on the top shopping ads up to 5
+    * 🔐 2captcha integration
+    * 📨 Telegram notification
+    * 📝 Generate daily click report
+    * 📱 Open found links on Android device
+    * 🪝 Hooks for extending the tool with custom behavior
+    * 💻 Remote control dashboard ([subscribe here](https://buy.stripe.com/00gdU8c3rg8KcUMdR7)) ([see how it works](https://youtu.be/F0R1NeEF-EM))
+
+        ![click report](assets/dashboard.png)
 
 <br>
 
@@ -116,6 +119,7 @@ The followings are the default values in the config file.
         "browser_count": 2,
         "multiprocess_style": 1,
         "loop_wait_time": 60,
+        "wait_factor": 1.0,
         "running_interval_start": "00:00",
         "running_interval_end": "00:00",
         "2captcha_apikey": "",
@@ -197,6 +201,10 @@ The followings are the default values in the config file.
     * If *multiprocess_style* is 1, queries read from the file are shuffled.
 
 * **loop_wait_time**: Wait time between runs in seconds. Default is 60. Used with `run_in_loop.py`.
+
+* **wait_factor**: Wait factor to modify all sleeps except loop wait. The default value is 1.0.
+    * For example, if you want to decrease waits by half, you can set this to 0.5, or if you want to increase them by 30%, you can use this as 1.3.
+    * Note that especially with decreasing, it can make the tool faster but can not guarantee proper functioning.
 
 * **running_interval_start**: Running interval start in "HH:MM" format. Used with `run_in_loop.py`.
     * If the current time is outside of the interval, it waits the start time to run again.

@@ -21,6 +21,7 @@ from utils import (
 )
 from webdriver import create_webdriver
 
+
 if config.behavior.telegram_enabled:
     from telegram_notifier import notify_matching_ads, start_bot
 
@@ -146,7 +147,7 @@ def main():
         from time import sleep
 
         driver.get("https://nowsecure.nl/")
-        sleep(7)
+        sleep(7 * config.behavior.wait_factor)
 
         driver.quit()
 
