@@ -26,7 +26,7 @@ This command-line tool clicks ads for a certain query on Bing search using [unde
     * 📝 Generate daily click report
     * 📱 Open found links on Android device
     * 🪝 Hooks for extending the tool with custom behavior
-    * 💻 Remote control dashboard ([subscribe here](https://buy.stripe.com/00gdU8c3rg8KcUMdR7)) ([see how it works](https://youtu.be/F0R1NeEF-EM))
+    * 💻 Remote control dashboard ([subscribe here](https://buy.stripe.com/00gdU8c3rg8KcUMdR7)) ([see how it works](https://vimeo.com/1072189164))
 
         ![click report](assets/dashboard.png)
 
@@ -267,7 +267,7 @@ The followings are the default values in the config file.
 
     * Watch an example run
 
-        [![Send to Android](assets/send_to_android_cover.png)](https://youtu.be/SL92brQUBwA)
+        [![Send to Android](assets/send_to_android_cover.png)](https://vimeo.com/1072188899)
 
 <br>
 
@@ -286,7 +286,7 @@ Apply the following steps for once to enable Telegram notifications.
 
 ## Execution Example
 
-[Watch recording of an execution](https://youtu.be/V82uyaDeW1g)
+[Watch recording of an execution](https://vimeo.com/1072188521)
 
 <br>
 
