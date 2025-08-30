@@ -1,7 +1,13 @@
-FROM python:3.11.6-slim-bookworm
+FROM python:3.11.12-slim-bookworm
 
 # install required packages
-RUN apt-get update && apt-get install -y wget gnupg
+RUN apt-get update && apt-get install -y \
+    wget gnupg \
+    python3-tk python3-dev xvfb \
+    libnss3 libxss1 libatk-bridge2.0-0 libgtk-3-0 \
+    libdrm2 libxcomposite1 libxrandr2 libgbm1 libasound2 \
+    fonts-liberation \
+  && rm -rf /var/lib/apt/lists/*
 
 # install google chrome
 RUN wget -q -O - https://dl-ssl.google.com/linux/linux_signing_key.pub | apt-key add -
@@ -26,6 +32,12 @@ COPY . /src
 ENV DISPLAY=:99
 
 # start Xvfb
-CMD Xvfb :99 -screen 0 1920x1080x16
+CMD Xvfb :99 -screen 0 1920x1080x16 -ac +extension GLX +render -noreset
+
+RUN python3 - <<EOF
+from undetected_chromedriver.patcher import Patcher
+p = Patcher()
+p.auto()
+EOF
 
 ENTRYPOINT ["python"]

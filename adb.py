@@ -135,7 +135,7 @@ class ADBController:
             result = subprocess.run(command, capture_output=True, text=True)
 
             if result.returncode == 0:
-                logger.debug(f"Back key event was successfully sent.")
+                logger.debug("Back key event was successfully sent.")
             else:
                 logger.error(f"Couldn't send key event: {result.stderr}")
 

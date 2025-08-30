@@ -153,9 +153,11 @@ def create_webdriver(
     chrome_options.add_argument("--disk-cache-size=0")
     chrome_options.add_argument("--disable-breakpad")
     chrome_options.add_argument("--disable-renderer-backgrounding")
+    chrome_options.add_argument("--allow-running-insecure-content")
+    chrome_options.add_argument("--disable-search-engine-choice-screen")
     chrome_options.add_argument(f"--user-agent={user_agent}")
 
-    optimization_features = [
+    disabled_features = [
         "OptimizationGuideModelDownloading",
         "OptimizationHintsFetching",
         "OptimizationTargetPrediction",
@@ -163,8 +165,11 @@ def create_webdriver(
         "Translate",
         "DownloadBubble",
         "DownloadBubbleV2",
+        "PrivacySandboxSettings4",
+        "UserAgentClientHint",
+        "DisableLoadExtensionCommandLineSwitch",
     ]
-    chrome_options.add_argument(f"--disable-features={','.join(optimization_features)}")
+    chrome_options.add_argument(f"--disable-features={','.join(disabled_features)}")
 
     # disable WebRTC IP tracking
     webrtc_preferences = {
@@ -289,6 +294,8 @@ def create_webdriver(
         driver.set_window_position(new_x, new_y)
         sleep(get_random_sleep(0.1, 0.5) * config.behavior.wait_factor)
 
+    _execute_stealth_js_code(driver)
+
     return (driver, country_code) if config.webdriver.country_domain else (driver, None)
 
 
@@ -325,3 +332,83 @@ def _get_driver_exe_path() -> str:
     driver_exe_path = os.path.join(driver_exe_folder, "_".join([prefix, exe_name]))
 
     return driver_exe_path
+
+
+def _execute_stealth_js_code(driver: undetected_chromedriver.Chrome):
+    """Execute the stealth JS code to prevent detection
+
+    Signature changes can be tested by loading the following addresses
+    - https://browserleaks.com/canvas
+    - https://browserleaks.com/webrtc
+    - https://browserleaks.com/webgl
+
+    :type driver: undetected_chromedriver.Chrome
+    :param driver: WebDriver instance
+    """
+
+    stealth_js = r"""
+    (() => {
+    // 1) Random vendor/platform/WebGL info
+    const vendors = ["Intel Inc.","NVIDIA Corporation","AMD","Google Inc."];
+    const renderers = ["ANGLE (Intel® Iris™ Graphics)","ANGLE (NVIDIA GeForce)","WebKit WebGL"];
+    const vendor = vendors[Math.floor(Math.random()*vendors.length)];
+    const renderer = renderers[Math.floor(Math.random()*renderers.length)];
+    Object.defineProperty(navigator, "vendor", { get: ()=>vendor });
+    Object.defineProperty(navigator, "platform", { get: ()=>["Win32","Linux x86_64","MacIntel"][Math.floor(Math.random()*3)] });
+
+    // 2) Canvas 2D noise
+    const rawToDataURL = HTMLCanvasElement.prototype.toDataURL;
+    HTMLCanvasElement.prototype.toDataURL = function(type, ...args) {
+        const ctx = this.getContext("2d");
+        const image = ctx.getImageData(0,0,this.width,this.height);
+        for(let i=0;i<image.data.length;i+=4){
+        const noise = (Math.random()-0.5)*2; // -1..+1
+        image.data[i]   = image.data[i]+noise;    // R
+        image.data[i+1] = image.data[i+1]+noise;  // G
+        image.data[i+2] = image.data[i+2]+noise;  // B
+        }
+        ctx.putImageData(image,0,0);
+        return rawToDataURL.apply(this,[type,...args]);
+    };
+
+    // 3) Canvas toBlob noise
+    const rawToBlob = HTMLCanvasElement.prototype.toBlob;
+    HTMLCanvasElement.prototype.toBlob = function(cb, type, quality) {
+        const ctx = this.getContext("2d");
+        const image = ctx.getImageData(0,0,this.width,this.height);
+        for(let i=0;i<image.data.length;i+=4){
+        const noise = (Math.random()-0.5)*2;
+        image.data[i]   += noise;
+        image.data[i+1] += noise;
+        image.data[i+2] += noise;
+        }
+        ctx.putImageData(image,0,0);
+        return rawToBlob.call(this,cb,type,quality);
+    };
+
+    // 4) WebGL patch: vendor/renderer
+    const getParam = WebGLRenderingContext.prototype.getParameter;
+    WebGLRenderingContext.prototype.getParameter = function(param) {
+        if(param === 37445) return vendor;    // UNMASKED_VENDOR_WEBGL
+        if(param === 37446) return renderer;  // UNMASKED_RENDERER_WEBGL
+        return getParam.call(this,param);
+    };
+
+    // 5) WebRTC IP leak prevention
+    const OrigRTCPeer = window.RTCPeerConnection;
+    window.RTCPeerConnection = function(cfg, opts) {
+        const pc = new OrigRTCPeer(cfg, opts);
+        const origCreateOffer = pc.createOffer;
+        pc.createOffer = function() {
+        return origCreateOffer.apply(this).then(o => {
+            o.sdp = o.sdp.replace(/^a=candidate:.+$/gm,"");
+            return o;
+        });
+        };
+        return pc;
+    };
+    window.RTCPeerConnection.prototype = OrigRTCPeer.prototype;
+    })();
+    """
+
+    driver.execute_cdp_cmd("Page.addScriptToEvaluateOnNewDocument", {"source": stealth_js})

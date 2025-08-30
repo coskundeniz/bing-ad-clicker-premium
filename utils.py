@@ -8,7 +8,6 @@ from time import sleep
 from typing import Optional
 
 try:
-    import pyautogui
     import requests
     import openpyxl
     import undetected_chromedriver
@@ -18,7 +17,6 @@ except ImportError:
     packages_path = Path.cwd() / "env" / "Lib" / "site-packages"
     sys.path.insert(0, f"{packages_path}")
 
-    import pyautogui
     import requests
     import openpyxl
     import undetected_chromedriver

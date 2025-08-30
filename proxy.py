@@ -125,10 +125,18 @@ chrome.webRequest.onAuthRequired.addListener(
     logger.debug(f"Creating '{plugin_folder}' folder...")
     plugin_folder.mkdir(exist_ok=True)
 
-    with open(plugin_folder / "manifest.json", "w") as manifest_file:
+    manifest_path = plugin_folder / "manifest.json"
+    with open(manifest_path, "w", encoding="utf-8") as manifest_file:
         manifest_file.write(manifest_json)
 
-    with open(plugin_folder / "background.js", "w") as background_js_file:
+    background_path = plugin_folder / "background.js"
+    with open(background_path, "w", encoding="utf-8") as background_js_file:
         background_js_file.write(background_js)
 
-    chrome_options.add_argument(f"--load-extension={plugin_folder}")
+    if not manifest_path.exists() or not background_path.exists():
+        raise RuntimeError("Failed to create extension files")
+
+    extension_path = str(plugin_folder.resolve())
+    logger.debug(f"Loading extension from: {extension_path}")
+
+    chrome_options.add_argument(f"--load-extension={extension_path}")
